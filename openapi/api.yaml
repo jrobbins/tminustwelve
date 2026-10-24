@@ -1,0 +1,1208 @@
+openapi: 3.0.0
+info:
+  description: >-
+    The API for TMinusTwelve. This tool guides launch owners
+    through our launch process and allows reviewers to review and approve launches.
+  version: 1.0.0
+  title: TMinusTwelve API
+  license:
+    name: Apache-2.0
+    url: 'https://www.apache.org/licenses/LICENSE-2.0.html'
+servers:
+  - url: /v0
+paths:
+  /login:
+    post:
+      summary: Authenticate a user with Google Sign-In
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignInRequest'
+      responses:
+        '200':
+          description: User authenticated successfully and session established
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '401':
+          description: Invalid Google Sign-In credential or unauthorized user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+
+  /logout:
+    post:
+      summary: Sign out the current user and clear session
+      operationId: logoutUser
+      responses:
+        '200':
+          description: User signed out successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+
+  /accounts:
+    post:
+      summary: Create a new user account (Site administrator only)
+      operationId: createAccount
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAccountRequest'
+      responses:
+        '201':
+          description: Account created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '400':
+          description: Invalid request or account already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '403':
+          description: User is not a site administrator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+
+  /accounts/current:
+    get:
+      summary: Retrieve the account for the currently signed-in user
+      operationId: getCurrentAccount
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: The signed-in user's account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '404':
+          description: No account found for the signed-in email address
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+
+  /accounts/{account_id}:
+    parameters:
+      - $ref: '#/components/parameters/AccountIdParam'
+    get:
+      summary: Retrieve an account by ID (signed-in user with matching email or administrator)
+      operationId: getAccount
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Account details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '403':
+          description: Signed-in user does not match account email and is not an administrator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+    patch:
+      summary: Update an account to grant or revoke permissions (Site administrator only)
+      operationId: updateAccount
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAccountRequest'
+      responses:
+        '200':
+          description: Account permissions updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '400':
+          description: Invalid permission fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '403':
+          description: User is not a site administrator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+    delete:
+      summary: Delete an account (Site administrator only)
+      operationId: deleteAccount
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Account deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '403':
+          description: User is not a site administrator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+
+  /launches:
+    get:
+      summary: List launches with optional filtering by owner, milestone, or gate review status
+      operationId: listLaunches
+      parameters:
+        - name: owner_email
+          in: query
+          required: false
+          description: Filter launches owned by the specified email address
+          schema:
+            type: string
+            format: email
+        - name: milestone
+          in: query
+          required: false
+          description: Filter launches that have a stage targeting this milestone number
+          schema:
+            type: integer
+            minimum: 1
+        - name: gate_kind
+          in: query
+          required: false
+          description: Filter launches containing a gate of this kind
+          schema:
+            $ref: '#/components/schemas/GateKind'
+        - name: gate_status
+          in: query
+          required: false
+          description: Filter launches containing a gate with this status (e.g., 1 for PENDING reviews)
+          schema:
+            $ref: '#/components/schemas/GateStatus'
+      responses:
+        '200':
+          description: List of launches visible to the caller
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaunchListResponse'
+    post:
+      summary: Create a new launch (signed-in users only)
+      operationId: createLaunch
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLaunchRequest'
+      responses:
+        '201':
+          description: Launch created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaunchDetail'
+        '400':
+          description: Missing or invalid required fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '401':
+          description: Authentication required to create a launch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+
+  /launches/{launch_id}:
+    parameters:
+      - $ref: '#/components/parameters/LaunchIdParam'
+    get:
+      summary: Get details for a single launch, including its stages and gates
+      operationId: getLaunch
+      responses:
+        '200':
+          description: Full launch details including stages and gates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaunchDetail'
+        '404':
+          description: Launch not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+    patch:
+      summary: Update fields of an existing launch
+      operationId: updateLaunch
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateLaunchRequest'
+      responses:
+        '200':
+          description: Launch updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaunchDetail'
+        '400':
+          description: Invalid field values
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '403':
+          description: Caller is not a launch owner, site editor, or site administrator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '404':
+          description: Launch not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+    delete:
+      summary: Delete a launch (Launch owner, site editor, or site administrator)
+      operationId: deleteLaunch
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Launch deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '403':
+          description: Caller is not a launch owner, site editor, or site administrator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '404':
+          description: Launch not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+
+  /launches/{launch_id}/stages/{stage_id}:
+    parameters:
+      - $ref: '#/components/parameters/LaunchIdParam'
+      - $ref: '#/components/parameters/StageIdParam'
+    patch:
+      summary: Update a stage on a launch (e.g., set milestone)
+      operationId: updateStage
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateStageRequest'
+      responses:
+        '200':
+          description: Stage updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Stage'
+        '400':
+          description: Invalid stage parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '403':
+          description: Caller is not a launch owner, site editor, or site administrator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '404':
+          description: Launch or stage not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+
+  /launches/{launch_id}/votes:
+    parameters:
+      - $ref: '#/components/parameters/LaunchIdParam'
+    get:
+      summary: Get all votes across all gates for a launch
+      operationId: listVotesForLaunch
+      responses:
+        '200':
+          description: List of votes for the specified launch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoteListResponse'
+        '404':
+          description: Launch not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+
+  /launches/{launch_id}/votes/{gate_id}:
+    parameters:
+      - $ref: '#/components/parameters/LaunchIdParam'
+      - $ref: '#/components/parameters/GateIdParam'
+    get:
+      summary: Get all votes for a specific gate on a launch
+      operationId: listVotesForGate
+      responses:
+        '200':
+          description: List of votes for the specified gate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoteListResponse'
+        '404':
+          description: Launch or gate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+    post:
+      summary: Create or update the signed-in reviewer's vote on a gate (also updates Gate status)
+      operationId: setVoteForGate
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetVoteRequest'
+      responses:
+        '200':
+          description: Vote recorded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vote'
+        '400':
+          description: Invalid vote state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '403':
+          description: Caller does not have permission to vote on this gate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '404':
+          description: Launch or gate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+
+  /launches/{launch_id}/activities:
+    parameters:
+      - $ref: '#/components/parameters/LaunchIdParam'
+    get:
+      summary: Get the activity log and review feedback for a launch
+      operationId: listLaunchActivities
+      responses:
+        '200':
+          description: Chronological list of activities and feedback for the launch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityListResponse'
+        '404':
+          description: Launch not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+    post:
+      summary: Post review feedback or a comment on a launch or specific gate
+      operationId: createLaunchActivity
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateActivityRequest'
+      responses:
+        '201':
+          description: Activity comment recorded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Activity'
+        '400':
+          description: Invalid comment payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '403':
+          description: Caller is not permitted to comment on this launch or gate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '404':
+          description: Launch or gate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+
+  /launches/{launch_id}/activities/{activity_id}:
+    parameters:
+      - $ref: '#/components/parameters/LaunchIdParam'
+      - $ref: '#/components/parameters/ActivityIdParam'
+    delete:
+      summary: Delete an activity log entry (Site administrator only)
+      operationId: deleteLaunchActivity
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Activity deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Activity'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '403':
+          description: Caller is not a site administrator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '404':
+          description: Launch or activity not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+
+  /milestones:
+    get:
+      summary: List milestones with their associated launches for roadmap and release notes views
+      operationId: listMilestones
+      parameters:
+        - name: min_milestone
+          in: query
+          required: false
+          description: Minimum milestone number (inclusive)
+          schema:
+            type: integer
+            minimum: 1
+        - name: max_milestone
+          in: query
+          required: false
+          description: Maximum milestone number (inclusive)
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: List of milestones and their associated launches
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MilestoneListResponse'
+
+components:
+  securitySchemes:
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: session
+      description: Flask session cookie containing the authenticated Google Sign-In user email
+
+  parameters:
+    AccountIdParam:
+      name: account_id
+      in: path
+      required: true
+      description: Unique numeric identifier of the Account
+      schema:
+        type: integer
+        minimum: 1
+    LaunchIdParam:
+      name: launch_id
+      in: path
+      required: true
+      description: Unique numeric identifier of the Launch
+      schema:
+        type: integer
+        minimum: 1
+    StageIdParam:
+      name: stage_id
+      in: path
+      required: true
+      description: Unique numeric identifier of the Stage
+      schema:
+        type: integer
+        minimum: 1
+    GateIdParam:
+      name: gate_id
+      in: path
+      required: true
+      description: Unique numeric identifier of the Gate
+      schema:
+        type: integer
+        minimum: 1
+    ActivityIdParam:
+      name: activity_id
+      in: path
+      required: true
+      description: Unique numeric identifier of the Activity
+      schema:
+        type: integer
+        minimum: 1
+
+  schemas:
+    LaunchKind:
+      type: integer
+      enum: [0, 1, 2, 3]
+      description: |
+        Kind of launch (`LaunchKind` in `internals/enums.py`):
+        * `0` - NEW_FEATURE
+        * `1` - EXISTING_FEATURE
+        * `2` - CODE_ONLY_CHANGE
+        * `3` - DEPRECATION
+
+    StageKind:
+      type: integer
+      enum: [0, 1, 2, 3, 4, 5]
+      description: |
+        Predefined stage kinds (`StageKind` in `internals/enums.py`):
+        * `0` - INCUBATING
+        * `1` - DEV_TRIAL
+        * `2` - ORIGIN_TRIAL
+        * `3` - PREPARE_TO_SHIP
+        * `4` - SHIP
+        * `5` - PLAN (currently `4` in `internals/enums.py`)
+
+    GateKind:
+      type: integer
+      enum: [0, 1, 2, 3, 4]
+      description: |
+        Review gate kinds (`GateKind` in `internals/enums.py`):
+        * `0` - PRIVACY
+        * `1` - SECURITY
+        * `2` - ADOPTION
+        * `3` - DATA_QUALITY
+        * `4` - BOARD
+
+    GateStatus:
+      type: integer
+      enum: [0, 1, 2, 3, 4]
+      description: |
+        Review status of a gate (`GateStatus` in `internals/enums.py`):
+        * `0` - PREPARING
+        * `1` - PENDING
+        * `2` - IN_PROGRESS
+        * `3` - APPROVED
+        * `4` - NA
+
+    VoteValues:
+      type: integer
+      enum: [0, 1, 2, 3, 4, 5]
+      description: |
+        Reviewer vote values on a gate (`VoteValues` in `internals/enums.py`):
+        * `0` - NO_RESPONSE
+        * `1` - REVIEW_REQUESTED
+        * `2` - REVIEW_STARTED
+        * `3` - NEEDS_WORK
+        * `4` - APPROVED
+        * `5` - NA
+
+    ActivityKind:
+      type: integer
+      enum: [1, 2, 3, 4]
+      description: |
+        Activity log entry kinds (`ActivityKind` in `internals/enums.py`):
+        * `1` - USER_CHANGE
+        * `2` - MILESTONE_RESET
+        * `3` - USER_COMMENT
+        * `4` - SYSTEM_CHANGE
+
+    SignInRequest:
+      type: object
+      required:
+        - credential
+      properties:
+        credential:
+          type: string
+          description: ID token credential returned by Google Sign-In
+
+    Account:
+      type: object
+      description: Information and permissions for a registered user of TMinusTwelve (`Account` in `internals/models.py`)
+      required:
+        - id
+        - email
+        - created
+        - is_admin
+        - is_site_editor
+        - reviewer_for_gate_kinds
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        email:
+          type: string
+          format: email
+        created:
+          type: string
+          format: date-time
+          readOnly: true
+        is_admin:
+          type: boolean
+          default: false
+          description: Whether the user is a Site administrator
+        is_site_editor:
+          type: boolean
+          default: false
+          description: Whether the user is a Site editor who can edit any launch
+        reviewer_for_gate_kinds:
+          type: array
+          items:
+            $ref: '#/components/schemas/GateKind'
+          default: []
+          description: Gate kinds that this user is authorized to review
+
+    CreateAccountRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+        is_admin:
+          type: boolean
+          default: false
+        is_site_editor:
+          type: boolean
+          default: false
+        reviewer_for_gate_kinds:
+          type: array
+          items:
+            $ref: '#/components/schemas/GateKind'
+          default: []
+
+    UpdateAccountRequest:
+      type: object
+      description: Permissions that a site administrator can grant or revoke on an Account
+      properties:
+        is_admin:
+          type: boolean
+        is_site_editor:
+          type: boolean
+        reviewer_for_gate_kinds:
+          type: array
+          items:
+            $ref: '#/components/schemas/GateKind'
+
+    Vote:
+      type: object
+      description: One reviewer's decision on a Gate (`Vote` in `internals/models.py`)
+      required:
+        - id
+        - launch_id
+        - gate_id
+        - gate_kind
+        - state
+        - set_on
+        - reviewer_email
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        launch_id:
+          type: integer
+        gate_id:
+          type: integer
+        gate_kind:
+          $ref: '#/components/schemas/GateKind'
+        state:
+          $ref: '#/components/schemas/VoteValues'
+        set_on:
+          type: string
+          format: date-time
+          readOnly: true
+        reviewer_email:
+          type: string
+          format: email
+          readOnly: true
+
+    VoteListResponse:
+      type: object
+      required:
+        - votes
+      properties:
+        votes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Vote'
+
+    SetVoteRequest:
+      type: object
+      required:
+        - state
+      properties:
+        state:
+          $ref: '#/components/schemas/VoteValues'
+
+    Gate:
+      type: object
+      description: A coordination point on a launch's stage where reviewers and owners coordinate approval
+      required:
+        - id
+        - launch_id
+        - stage_id
+        - gate_kind
+        - status
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        launch_id:
+          type: integer
+          description: ID of the parent Launch
+        stage_id:
+          type: integer
+          description: ID of the parent Stage
+        gate_kind:
+          $ref: '#/components/schemas/GateKind'
+        status:
+          $ref: '#/components/schemas/GateStatus'
+        votes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Vote'
+          default: []
+          description: Reviewer votes recorded on this gate (at most one vote per reviewer)
+
+    Stage:
+      type: object
+      description: One stage in the lifecycle of a Launch
+      required:
+        - id
+        - launch_id
+        - stage_kind
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        launch_id:
+          type: integer
+          description: ID of the parent Launch
+        stage_kind:
+          $ref: '#/components/schemas/StageKind'
+        milestone:
+          type: integer
+          nullable: true
+          minimum: 1
+          example: 125
+          description: Monotonically increasing release milestone number (presented as e.g. M125)
+        gates:
+          type: array
+          items:
+            $ref: '#/components/schemas/Gate'
+          default: []
+
+    UpdateStageRequest:
+      type: object
+      properties:
+        milestone:
+          type: integer
+          nullable: true
+          minimum: 1
+
+    Launch:
+      type: object
+      description: Core fields of a Launch business object as defined in `internals/models.py`
+      required:
+        - id
+        - launch_kind
+        - name
+        - summary
+        - created
+        - creator_email
+        - updated
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created:
+          type: string
+          format: date-time
+          readOnly: true
+        creator_email:
+          type: string
+          format: email
+          readOnly: true
+        updated:
+          type: string
+          format: date-time
+          readOnly: true
+        updater_email:
+          type: string
+          format: email
+          nullable: true
+          readOnly: true
+        launch_kind:
+          $ref: '#/components/schemas/LaunchKind'
+        owner_emails:
+          type: array
+          items:
+            type: string
+            format: email
+          default: []
+        name:
+          type: string
+          minLength: 1
+        summary:
+          type: string
+          minLength: 1
+        motivation:
+          type: string
+          nullable: true
+        adoption_plan:
+          type: string
+          nullable: true
+        initial_public_proposal_url:
+          type: string
+          format: uri
+          nullable: true
+        explainer_url:
+          type: string
+          format: uri
+          nullable: true
+
+    LaunchDetail:
+      allOf:
+        - $ref: '#/components/schemas/Launch'
+        - type: object
+          required:
+            - stages
+          properties:
+            stages:
+              type: array
+              items:
+                $ref: '#/components/schemas/Stage'
+              description: Stages belonging to this Launch, each containing its Gates
+
+    LaunchListResponse:
+      type: object
+      required:
+        - launches
+      properties:
+        launches:
+          type: array
+          items:
+            $ref: '#/components/schemas/LaunchDetail'
+
+    CreateLaunchRequest:
+      type: object
+      description: >-
+        Required non-computed fields needed to create a Launch (`foundation.md`:
+        the launch creation form requests only required fields of the Launch object
+        that are not computed by the system).
+      required:
+        - launch_kind
+        - name
+        - summary
+      properties:
+        launch_kind:
+          $ref: '#/components/schemas/LaunchKind'
+        name:
+          type: string
+          minLength: 1
+        summary:
+          type: string
+          minLength: 1
+
+    UpdateLaunchRequest:
+      type: object
+      properties:
+        launch_kind:
+          $ref: '#/components/schemas/LaunchKind'
+        owner_emails:
+          type: array
+          items:
+            type: string
+            format: email
+        name:
+          type: string
+          minLength: 1
+        summary:
+          type: string
+          minLength: 1
+        motivation:
+          type: string
+          nullable: true
+        adoption_plan:
+          type: string
+          nullable: true
+        initial_public_proposal_url:
+          type: string
+          format: uri
+          nullable: true
+        explainer_url:
+          type: string
+          format: uri
+          nullable: true
+
+    Amendment:
+      type: object
+      description: Record of a single field value change within an Activity entry (`Amendment` in `internals/models.py`)
+      properties:
+        field_name:
+          type: string
+        old_value:
+          type: string
+          nullable: true
+        new_value:
+          type: string
+          nullable: true
+
+    Activity:
+      type: object
+      description: Immutable log entry recording an edit or review feedback on a Launch (`Activity` in `internals/models.py`)
+      required:
+        - id
+        - launch_id
+        - log_kind
+        - created
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        launch_id:
+          type: integer
+        gate_id:
+          type: integer
+          nullable: true
+        log_kind:
+          $ref: '#/components/schemas/ActivityKind'
+        created:
+          type: string
+          format: date-time
+          readOnly: true
+        author:
+          type: string
+          format: email
+          nullable: true
+          readOnly: true
+        comment_content:
+          type: string
+          nullable: true
+          description: Optional review feedback or comment text
+        deleted_by_email:
+          type: string
+          format: email
+          nullable: true
+          readOnly: true
+          description: Email of the administrator who deleted this activity, if deleted
+        amendments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Amendment'
+          default: []
+
+    CreateActivityRequest:
+      type: object
+      required:
+        - comment_content
+      properties:
+        gate_id:
+          type: integer
+          nullable: true
+          description: Optional ID of the Gate this review feedback relates to
+        comment_content:
+          type: string
+          minLength: 1
+
+    ActivityListResponse:
+      type: object
+      required:
+        - activities
+      properties:
+        activities:
+          type: array
+          items:
+            $ref: '#/components/schemas/Activity'
+
+    MilestoneGroup:
+      type: object
+      required:
+        - milestone
+        - label
+        - launches
+      properties:
+        milestone:
+          type: integer
+          minimum: 1
+          example: 125
+        label:
+          type: string
+          example: M125
+          description: Formatted milestone name (e.g., M125, M154)
+        launches:
+          type: array
+          items:
+            $ref: '#/components/schemas/LaunchDetail'
+
+    MilestoneListResponse:
+      type: object
+      required:
+        - milestones
+      properties:
+        milestones:
+          type: array
+          items:
+            $ref: '#/components/schemas/MilestoneGroup'
+
+    SuccessMessage:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          example: Done
+
+    ErrorMessage:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          example: Invalid request
+

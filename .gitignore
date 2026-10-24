@@ -1,3 +1,6 @@
+# Emacs
+*~
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -35,6 +38,9 @@ MANIFEST
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
+
+# Dependency directories
+node_modules
 
 # Unit test / coverage reports
 htmlcov/
